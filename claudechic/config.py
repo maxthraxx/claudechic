@@ -34,6 +34,10 @@ def _load_config() -> dict:
         _config.setdefault("analytics", {})
         _config["analytics"].setdefault("id", "anonymous")
         _config["analytics"].setdefault("enabled", True)
+        # Migrate legacy vim key to vi-mode
+        if "vim" in _config:
+            _config["vi-mode"] = _config.pop("vim")
+            _save_config()
     else:
         # New install - create config with fresh ID and save
         _config = {"analytics": {"enabled": True, "id": str(uuid.uuid4())}}
@@ -96,13 +100,12 @@ def is_new_install() -> bool:
     return _new_install
 
 
-def get_vim() -> bool:
-    """Check if vim mode is enabled."""
-    return _load_config().get("vim", False)
+def get_vi_mode() -> bool:
+    """Check if vi mode is enabled."""
+    return _load_config().get("vi-mode", False)
 
 
-def set_vim(enabled: bool) -> None:
-    """Enable or disable vim mode."""
-    config = _load_config()
-    config["vim"] = enabled
+def set_vi_mode(enabled: bool) -> None:
+    """Enable or disable vi mode."""
+    _load_config()["vi-mode"] = enabled
     _save_config()

@@ -584,11 +584,11 @@ def _handle_processes(app: "ChatApp") -> None:
 
 def _handle_vim(app: "ChatApp") -> bool:
     """Toggle vim mode for input."""
-    from claudechic.config import get_vim, set_vim
+    from claudechic.config import get_vi_mode, set_vi_mode
 
-    current = get_vim()
+    current = get_vi_mode()
     new_state = not current
-    set_vim(new_state)
+    set_vi_mode(new_state)
 
     if new_state:
         _track_feature(app, "vim")
