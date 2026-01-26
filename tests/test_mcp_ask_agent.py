@@ -8,11 +8,16 @@ class MockAgent:
     def __init__(self, name: str):
         self.name = name
         self.id = name
+        self.session_id = f"session-{name}"
         self.cwd = "/tmp"
         self.status = "idle"
         self.worktree = None
         self.client = True  # truthy
         self.received_prompt = None
+
+    @property
+    def analytics_id(self) -> str:
+        return self.session_id or self.id
 
     async def send(self, prompt: str) -> None:
         self.received_prompt = prompt
@@ -21,9 +26,12 @@ class MockAgent:
 class MockAgentManager:
     def __init__(self):
         self.agents: dict[str, MockAgent] = {}
+        self.active: MockAgent | None = None
 
     def add(self, agent: MockAgent) -> None:
         self.agents[agent.name] = agent
+        if self.active is None:
+            self.active = agent
 
     def find_by_name(self, name: str) -> MockAgent | None:
         return self.agents.get(name)
@@ -35,6 +43,10 @@ class MockAgentManager:
 class MockApp:
     def __init__(self):
         self.agent_mgr = MockAgentManager()
+
+    def run_worker(self, coro):
+        """Mock run_worker - just ignore the coroutine."""
+        pass
 
 
 @pytest.fixture

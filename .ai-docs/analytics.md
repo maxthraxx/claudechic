@@ -13,10 +13,30 @@
 
 ## Current Events
 
-- `app_started` - in `on_mount()`, includes env context (version, terminal, os)
-- `app_closed` - in `_cleanup_and_exit()`, includes duration
-- `agent_created` - in `on_agent_created()` observer
-- `agent_closed` - in `on_agent_closed()` observer, includes message_count, features_used
+### App Lifecycle
+- `app_installed` - first launch only, includes `claudechic_version`, `os`
+- `app_started` - every launch, includes `claudechic_version`, `term_width`, `term_height`, `term_program`, `os`, `has_uv`, `has_conda`, `is_git_repo`, `resumed`
+- `app_closed` - shutdown, includes `duration_seconds`, `term_width`, `term_height`
+
+### Agent Lifecycle
+- `agent_created` - new agent, includes `same_directory`, `model`
+- `agent_closed` - agent closes, includes `message_count`, `duration_seconds`, `same_directory`
+
+### User Actions
+All include `agent_id` to link events to specific Claude sessions.
+
+- `message_sent` - when user sends a message to Claude
+- `command_used` - when user runs a slash command, includes `command` name
+- `model_changed` - when user switches models, includes `from_model`, `to_model`
+- `worktree_action` - when user runs worktree commands, includes `action` (create/finish/cleanup/discard)
+
+### MCP Tools (Claude-initiated)
+All include `agent_id`.
+
+- `mcp_tool_used` - when Claude calls an MCP tool, includes `tool` (spawn_agent/spawn_worktree/ask_agent/tell_agent)
+
+### Errors
+- `error_occurred` - on errors, includes `error_type`, `status_code`, `agent_id`
 
 ## Design Decisions
 

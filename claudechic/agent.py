@@ -177,11 +177,6 @@ class Agent:
         # Plan file path (cached after first lookup)
         self.plan_path: Path | None = None
 
-        # Feature usage tracking (for analytics)
-        self.features_used: set[str] = set()
-        if worktree:
-            self.features_used.add("worktree")
-
         # UI state (managed by ChatApp, not widget references)
         self.pending_input: str = ""  # Saved input text when switching away
 
@@ -193,6 +188,11 @@ class Agent:
         self._claude_pid: int | None = None
         # Background task output files: command -> output_file path
         self._background_outputs: dict[str, str] = {}
+
+    @property
+    def analytics_id(self) -> str:
+        """ID for analytics events (session_id if connected, else internal id)."""
+        return self.session_id or self.id
 
     # -----------------------------------------------------------------------
     # Lifecycle

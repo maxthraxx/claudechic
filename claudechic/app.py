@@ -746,6 +746,11 @@ class ChatApp(App):
         ):
             return
 
+        # Track message sent
+        self.run_worker(
+            capture("message_sent", agent_id=agent.analytics_id if agent else "unknown")
+        )
+
         # User message will be mounted by _on_agent_prompt_sent callback
         self._send_to_active_agent(prompt)
 
@@ -1540,7 +1545,16 @@ class ChatApp(App):
             return
         if model == agent.model:
             return
+        old_model = agent.model or "default"
         agent.model = model
+        self.run_worker(
+            capture(
+                "model_changed",
+                from_model=old_model,
+                to_model=model,
+                agent_id=agent.analytics_id,
+            )
+        )
         self._update_footer_model(model)
         if agent.client:
             self.notify(f"Switching to {model}...")
@@ -1750,7 +1764,13 @@ class ChatApp(App):
             "created_at": time.time(),
             "same_directory": same_directory,
         }
-        self.run_worker(capture("agent_created", same_directory=same_directory))
+        self.run_worker(
+            capture(
+                "agent_created",
+                same_directory=same_directory,
+                model=agent.model or "default",
+            )
+        )
 
         try:
             # Create chat view for the agent
@@ -1844,12 +1864,7 @@ class ChatApp(App):
         asyncio.create_task(self.status_footer.refresh_branch(str(new_agent.cwd)))
         self.chat_input.focus()
 
-    def on_agent_closed(
-        self,
-        agent_id: str,
-        message_count: int = 0,
-        features_used: set[str] | None = None,
-    ) -> None:
+    def on_agent_closed(self, agent_id: str, message_count: int = 0) -> None:
         """Handle agent closure from AgentManager."""
         log.info(f"Agent closed: {agent_id}")
 
@@ -1857,14 +1872,12 @@ class ChatApp(App):
         metadata = self._agent_metadata.pop(agent_id, {})
         duration = time.time() - metadata.get("created_at", time.time())
         same_directory = metadata.get("same_directory", True)
-        features = list(features_used) if features_used else []
         self.run_worker(
             capture(
                 "agent_closed",
                 duration_seconds=int(duration),
                 same_directory=same_directory,
                 message_count=message_count,
-                features_used=features,
             )
         )
 
@@ -1918,7 +1931,12 @@ class ChatApp(App):
             elif "500" in err_str:
                 status_code = 500
         self.run_worker(
-            capture("error_occurred", error_type=error_type, status_code=status_code)
+            capture(
+                "error_occurred",
+                error_type=error_type,
+                status_code=status_code,
+                agent_id=agent.analytics_id,
+            )
         )
 
     def on_connection_lost(self, agent: Agent) -> None:

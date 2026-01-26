@@ -15,6 +15,8 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from claudechic.analytics import capture
+
 if TYPE_CHECKING:
     from claudechic.app import ChatApp
 
@@ -130,10 +132,16 @@ def get_help_commands() -> list[tuple[str, str]]:
     return result
 
 
-def _track_feature(app: "ChatApp", feature: str) -> None:
-    """Track a feature as used by the current agent."""
-    if app._agent:
-        app._agent.features_used.add(feature)
+def _track_command(app: "ChatApp", command: str) -> None:
+    """Track command usage for analytics."""
+    agent = app._agent
+    app.run_worker(
+        capture(
+            "command_used",
+            command=command,
+            agent_id=agent.analytics_id if agent else "unknown",
+        )
+    )
 
 
 def handle_command(app: "ChatApp", prompt: str) -> bool:
@@ -142,42 +150,49 @@ def handle_command(app: "ChatApp", prompt: str) -> bool:
 
     # Handle ! prefix for inline shell commands
     if cmd.startswith("!"):
-        _track_feature(app, "shell")
+        _track_command(app, "shell")
         return _handle_bang(app, cmd[1:].strip())
 
     if cmd == "/clear":
+        _track_command(app, "clear")
         app._start_new_session()
         return True
 
     if cmd.startswith("/resume"):
+        _track_command(app, "resume")
         return _handle_resume(app, cmd)
 
     if cmd.startswith("/worktree"):
         from claudechic.features.worktree import handle_worktree_command
 
+        # worktree_action event is tracked separately with more detail
         handle_worktree_command(app, cmd)
         return True
 
     if cmd.startswith("/agent"):
-        _track_feature(app, "agent")
+        _track_command(app, "agent")
         return _handle_agent(app, cmd)
 
     if cmd.startswith("/shell"):
-        _track_feature(app, "shell")
+        _track_command(app, "shell")
         return _handle_shell(app, cmd)
 
     if cmd == "/theme":
+        _track_command(app, "theme")
         app.search_themes()
         return True
 
     if cmd.startswith("/compactish"):
+        _track_command(app, "compactish")
         return _handle_compactish(app, cmd)
 
     if cmd == "/usage":
+        _track_command(app, "usage")
         app._handle_usage_command()
         return True
 
     if cmd == "/model" or cmd.startswith("/model "):
+        _track_command(app, "model")
         parts = cmd.split(maxsplit=1)
         if len(parts) == 1:
             # No argument - show prompt
@@ -196,28 +211,34 @@ def handle_command(app: "ChatApp", prompt: str) -> bool:
         return True
 
     if cmd == "/exit":
+        _track_command(app, "exit")
         app.exit()
         return True
 
     if cmd == "/vim":
+        _track_command(app, "vim")
         return _handle_vim(app)
 
     if cmd == "/welcome":
+        _track_command(app, "welcome")
         return _handle_welcome(app)
 
     if cmd == "/help":
+        _track_command(app, "help")
         app.run_worker(_handle_help(app))
         return True
 
     if cmd == "/processes":
+        _track_command(app, "processes")
         _handle_processes(app)
         return True
 
     if cmd.startswith("/analytics"):
+        _track_command(app, "analytics")
         return _handle_analytics(app, cmd)
 
     if cmd == "/diff" or cmd == "/d" or cmd.startswith("/diff "):
-        _track_feature(app, "diff")
+        _track_command(app, "diff")
         target = cmd.split(maxsplit=1)[1] if cmd.startswith("/diff ") else None
         app._toggle_diff_mode(target)
         return True
@@ -623,9 +644,6 @@ def _handle_vim(app: "ChatApp") -> bool:
     current = get_vi_mode()
     new_state = not current
     set_vi_mode(new_state)
-
-    if new_state:
-        _track_feature(app, "vim")
 
     # Update all ChatInput widgets
     app._update_vi_mode(new_state)

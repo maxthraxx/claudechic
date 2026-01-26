@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 from textual.containers import Center
 from textual import work
 
+from claudechic.analytics import capture
+
 from claudechic.features.worktree.git import (
     FinishInfo,
     FinishPhase,
@@ -61,15 +63,22 @@ def handle_worktree_command(app: "ChatApp", command: str) -> None:
         _show_worktree_modal(app)
         return
 
+    agent = app._agent
+    agent_id = agent.analytics_id if agent else "unknown"
+
     subcommand = parts[1]
     if subcommand == "finish":
+        app.run_worker(capture("worktree_action", action="finish", agent_id=agent_id))
         _handle_finish(app)
     elif subcommand == "cleanup":
+        app.run_worker(capture("worktree_action", action="cleanup", agent_id=agent_id))
         branches = parts[2].split() if len(parts) > 2 else None
         _handle_cleanup(app, branches)
     elif subcommand == "discard":
+        app.run_worker(capture("worktree_action", action="discard", agent_id=agent_id))
         _handle_discard(app)
     else:
+        app.run_worker(capture("worktree_action", action="create", agent_id=agent_id))
         _switch_or_create_worktree(app, subcommand)
 
 

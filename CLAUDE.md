@@ -19,6 +19,7 @@ claudechic/
 ├── __init__.py        # Package entry, exports ChatApp
 ├── __main__.py        # CLI entry point
 ├── agent.py           # Agent class - SDK connection, history, permissions, state
+├── analytics.py       # PostHog analytics - fire-and-forget event tracking
 ├── agent_manager.py   # AgentManager - coordinates multiple concurrent agents
 ├── app.py             # ChatApp - main application, event handlers
 ├── commands.py        # Slash command routing (/agent, /shell, /clear, etc.)

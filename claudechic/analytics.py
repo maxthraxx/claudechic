@@ -5,6 +5,7 @@ import platform
 import shutil
 import uuid as uuid_mod
 from datetime import datetime, timezone
+from pathlib import Path
 
 import httpx
 from importlib.metadata import version
@@ -16,6 +17,17 @@ SESSION_ID = str(uuid_mod.uuid4())  # Unique per process
 
 POSTHOG_HOST = "https://us.i.posthog.com"
 POSTHOG_API_KEY = "phc_M0LMkbSaDsaXi5LeYE5A95Kz8hTHgsJ4POlqucehsse"
+
+# Module-level client for connection reuse (lazy initialized)
+_client: httpx.AsyncClient | None = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    """Get or create the shared HTTP client."""
+    global _client
+    if _client is None:
+        _client = httpx.AsyncClient(timeout=2.0)
+    return _client
 
 
 def get_terminal_program() -> str:
@@ -56,8 +68,8 @@ async def capture(
     # Build properties - session_id on all events, context only on app_started
     props: dict = {"$session_id": SESSION_ID, **properties}
 
-    if event in ("app_started", "app_installed"):
-        # Include version and environment context on session start and install
+    if event == "app_started":
+        # Include version and environment context on session start
         props["claudechic_version"] = VERSION
         term_size = shutil.get_terminal_size()  # Falls back to (80, 24)
         props["term_width"] = term_size.columns
@@ -66,6 +78,18 @@ async def capture(
         props["os"] = platform.system()
         props["has_uv"] = shutil.which("uv") is not None
         props["has_conda"] = shutil.which("conda") is not None
+        props["is_git_repo"] = Path(".git").exists() or Path(".git").is_file()
+
+    if event == "app_installed":
+        # Minimal context for install - just version and OS
+        props["claudechic_version"] = VERSION
+        props["os"] = platform.system()
+
+    if event == "app_closed":
+        # Capture terminal size at close (may have changed during session)
+        term_size = shutil.get_terminal_size()
+        props["term_width"] = term_size.columns
+        props["term_height"] = term_size.lines
 
     payload = {
         "api_key": POSTHOG_API_KEY,
@@ -76,11 +100,7 @@ async def capture(
     }
 
     try:
-        async with httpx.AsyncClient() as client:
-            await client.post(
-                f"{POSTHOG_HOST}/capture/",
-                json=payload,
-                timeout=5.0,
-            )
-    except Exception:
+        client = _get_client()
+        await client.post(f"{POSTHOG_HOST}/capture/", json=payload)
+    except (httpx.HTTPError, httpx.TimeoutException):
         pass  # Silent failure - analytics should never impact user experience
