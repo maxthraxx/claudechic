@@ -497,7 +497,9 @@ class Agent:
                     self._handle_command_output(content)
                 # Detect SDK-loaded skills (e.g., /cleanup -> <command-name>/cleanup</command-name>)
                 if "<command-name>/" in content:
-                    match = re.search(r"<command-name>(/\w+)</command-name>", content)
+                    match = re.search(
+                        r"<command-name>(/[\w:-]+)</command-name>", content
+                    )
                     if match and self.observer:
                         self.observer.on_skill_loaded(self, match.group(1))
             elif isinstance(content, list):

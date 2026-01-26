@@ -253,10 +253,34 @@ def handle_command(app: "ChatApp", prompt: str) -> bool:
         )
         return True
 
-    # Track for typo detection (cleared if Skill tool is invoked)
+    # Check if it's a user-defined command (won't trigger Skill tool)
     agent = app._agent
+    cwd = agent.cwd if agent else Path.cwd()
+    if _is_user_command(cmd_name, cwd):
+        # User command - SDK will inject it, no need to track
+        return False
+
+    # Track for typo detection (cleared if Skill tool is invoked)
     if agent:
         app._pending_slash_commands[agent.id] = cmd_name
+
+    return False
+
+
+def _is_user_command(cmd_name: str, cwd: Path) -> bool:
+    """Check if cmd_name is a user-defined command in ~/.claude/commands/ or .claude/commands/."""
+    # Strip leading slash: /cleanup -> cleanup
+    name = cmd_name.lstrip("/")
+
+    # Check global commands
+    global_commands = Path.home() / ".claude" / "commands"
+    if (global_commands / f"{name}.md").exists():
+        return True
+
+    # Check project commands
+    project_commands = cwd / ".claude" / "commands"
+    if (project_commands / f"{name}.md").exists():
+        return True
 
     return False
 
