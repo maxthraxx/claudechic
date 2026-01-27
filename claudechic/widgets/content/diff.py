@@ -76,6 +76,49 @@ def _highlight_lines(text: str, language: str) -> list[Content]:
     return _highlight_text(text, language).split("\n")
 
 
+def _snap_to_tokens(
+    spans: list[tuple[int, int]], content: Content
+) -> list[tuple[int, int]]:
+    """Expand spans to align with syntax token boundaries.
+
+    This prevents word-diff highlighting from cutting through the middle of
+    syntax-highlighted tokens, which causes ugly mid-word color changes.
+    """
+    if not spans:
+        return []
+
+    # Collect token boundaries from syntax highlighting spans
+    # Note: _spans is internal to Textual's Content, but no public API exists
+    boundaries = {0, len(content)}
+    for span in content._spans:
+        boundaries.add(span.start)
+        boundaries.add(span.end)
+    boundaries = sorted(boundaries)
+
+    result = []
+    for start, end in spans:
+        # Find the boundary <= start (snap left edge left)
+        snapped_start = 0
+        for b in boundaries:
+            if b <= start:
+                snapped_start = b
+            else:
+                break
+
+        # Find the boundary >= end (snap right edge right)
+        snapped_end = len(content)
+        for b in reversed(boundaries):
+            if b >= end:
+                snapped_end = b
+            else:
+                break
+
+        if snapped_start < snapped_end:
+            result.append((snapped_start, snapped_end))
+
+    return result
+
+
 def _word_diff_spans(
     old_line: str, new_line: str
 ) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
@@ -132,14 +175,16 @@ def _build_line_content(
 ) -> Content:
     """Apply background style to line, with optional subtle highlights for changed spans.
 
-    Preserves syntax highlighting from the input content.
+    Preserves syntax highlighting from the input content. Snaps highlight spans
+    to syntax token boundaries to avoid mid-word color changes.
     """
     # Apply base background to entire line (preserves syntax highlighting)
     result = line_content.stylize(bg_style, 0, len(line_content))
 
-    # Apply subtle underline for changed regions (doesn't obscure syntax colors)
+    # Snap spans to token boundaries, then apply highlight
     if highlight_spans and highlight_style:
-        for start, end in highlight_spans:
+        snapped = _snap_to_tokens(highlight_spans, line_content)
+        for start, end in snapped:
             # Clamp to line length
             start = min(start, len(result))
             end = min(end, len(result))

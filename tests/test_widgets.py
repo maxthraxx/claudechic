@@ -530,3 +530,86 @@ async def test_process_panel_updates():
         panel.update_processes([])
         panel.set_visible(True)
         assert panel.has_class("hidden")
+
+
+# --- Diff token snapping tests ---
+
+
+def test_snap_to_tokens_expands_partial_spans():
+    """Word-diff spans that cut through tokens get expanded to token boundaries."""
+    from textual.content import Content, Span
+    from claudechic.widgets.content.diff import _snap_to_tokens
+
+    # Simulate syntax-highlighted "activeInsertionOrders:" with tokens:
+    # [0-21] identifier, [21-22] punctuation
+    content = Content(
+        "activeInsertionOrders:",
+        spans=[Span(0, 21, "blue"), Span(21, 22, "white")],
+    )
+
+    # Span that cuts through the identifier (e.g., highlighting just "active")
+    raw_spans = [(0, 6)]
+    snapped = _snap_to_tokens(raw_spans, content)
+
+    # Should expand to cover the whole identifier token
+    assert snapped == [(0, 21)]
+
+
+def test_snap_to_tokens_preserves_aligned_spans():
+    """Spans already aligned with token boundaries stay unchanged."""
+    from textual.content import Content, Span
+    from claudechic.widgets.content.diff import _snap_to_tokens
+
+    content = Content(
+        "foo bar",
+        spans=[Span(0, 3, "red"), Span(3, 4, "white"), Span(4, 7, "blue")],
+    )
+
+    # Span exactly matching first token
+    raw_spans = [(0, 3)]
+    snapped = _snap_to_tokens(raw_spans, content)
+    assert snapped == [(0, 3)]
+
+
+def test_snap_to_tokens_empty_spans():
+    """Empty span list returns empty."""
+    from textual.content import Content
+    from claudechic.widgets.content.diff import _snap_to_tokens
+
+    content = Content("hello")
+    assert _snap_to_tokens([], content) == []
+
+
+def test_word_diff_with_go_syntax():
+    """Integration test: word diff + snapping with real Go syntax highlighting."""
+    from claudechic.widgets.content.diff import (
+        _word_diff_spans,
+        _snap_to_tokens,
+        _highlight_lines,
+    )
+
+    old_line = 'activeOrders: getValue("active",'
+    new_line = 'dirtyOrders: getValue("dirty",'
+
+    # Get raw word-diff spans
+    old_spans, new_spans = _word_diff_spans(old_line, new_line)
+
+    # Raw spans should identify the changed words
+    assert len(old_spans) == 2  # "activeOrders" and "active"
+    assert len(new_spans) == 2  # "dirtyOrders" and "dirty"
+
+    # Get syntax-highlighted content
+    old_highlighted = _highlight_lines(old_line, "go")
+    new_highlighted = _highlight_lines(new_line, "go")
+
+    assert old_highlighted and new_highlighted
+
+    # Snap to token boundaries
+    snapped_old = _snap_to_tokens(old_spans, old_highlighted[0])
+
+    # Snapped spans should cover complete tokens
+    # The string "active" should expand to include quotes -> "active"
+    for start, end in snapped_old:
+        text = old_line[start:end]
+        # Should not have partial words (no cuts mid-identifier)
+        assert not text[0].isalnum() or start == 0 or not old_line[start - 1].isalnum()
