@@ -3,6 +3,7 @@
 import os
 import platform
 import shutil
+import sys
 import uuid as uuid_mod
 from datetime import datetime, timezone
 from pathlib import Path
@@ -79,6 +80,7 @@ async def capture(
         props["has_uv"] = shutil.which("uv") is not None
         props["has_conda"] = shutil.which("conda") is not None
         props["is_git_repo"] = Path(".git").exists() or Path(".git").is_file()
+        props["cli_args"] = sys.argv[1:]
 
     if event == "app_installed":
         # Minimal context for install - just version and OS
