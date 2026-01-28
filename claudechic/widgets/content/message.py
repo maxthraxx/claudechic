@@ -87,11 +87,13 @@ class ChatMessage(Static, PointerMixin):
 
     def __init__(self, content: str = "", is_agent: bool = False) -> None:
         super().__init__()
-        self._content = content.rstrip()
+        self._initial_content = content.rstrip()  # Content to render in compose()
+        self._content = self._initial_content  # Full accumulated content
         self._is_agent = is_agent
         self._stream = None  # Lazy-initialized MarkdownStream
         self._pending_text = ""  # Accumulated text waiting to be flushed
         self._flush_timer = None  # Timer for debounced flush
+        self._first_flush_done = False  # Track if first stream write has happened
 
     def _is_streaming(self) -> bool:
         """Check if we're actively streaming content."""
@@ -104,12 +106,14 @@ class ChatMessage(Static, PointerMixin):
         set_pointer("default")
 
     def compose(self) -> ComposeResult:
+        # Only render initial content - streaming content goes through MarkdownStream
+        # This prevents duplication when append_content() is called before compose() runs
         if self._is_agent:
             # Wrap in container for nested border effect
             with Vertical(id="agent-inner"):
-                yield Markdown(self._content, id="content")
+                yield Markdown(self._initial_content, id="content")
         else:
-            yield Markdown(self._content, id="content")
+            yield Markdown(self._initial_content, id="content")
 
     def _get_stream(self):
         """Get or create the MarkdownStream for this message."""
@@ -152,12 +156,28 @@ class ChatMessage(Static, PointerMixin):
             self._flush_timer.stop()
             self._flush_timer = None
 
-        # Write accumulated text
-        if self._pending_text:
-            stream = self._get_stream()
-            if stream:
-                self.call_later(stream.write, self._pending_text)
-            self._pending_text = ""
+        if not self._pending_text:
+            return
+
+        stream = self._get_stream()
+        if not stream:
+            # Widget not mounted yet - reschedule flush
+            self._flush_timer = self.set_timer(
+                self._DEBOUNCE_INTERVAL, self._flush_pending
+            )
+            return
+
+        # On first flush, write all content beyond what compose() rendered
+        # (handles race where append_content runs before compose)
+        if not self._first_flush_done:
+            self._first_flush_done = True
+            text_to_write = self._content[len(self._initial_content) :]
+        else:
+            text_to_write = self._pending_text
+
+        if text_to_write:
+            self.call_later(stream.write, text_to_write)
+        self._pending_text = ""
 
     def flush(self) -> None:
         """Flush any pending text and stop the stream on completion."""
