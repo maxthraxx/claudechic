@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 from claude_agent_sdk import tool, create_sdk_mcp_server
 
 from claudechic.analytics import capture
+from claudechic.config import CONFIG
 from claudechic.features.worktree.git import (
     FinishPhase,
     FinishState,
@@ -487,16 +488,21 @@ def create_chic_server(caller_name: str | None = None):
         caller_name: Name of the agent that will use this server.
             Used to identify the sender in spawn/ask/tell agent calls.
     """
+    tools = [
+        _make_spawn_agent(caller_name),
+        _make_spawn_worktree(caller_name),
+        _make_ask_agent(caller_name),
+        _make_tell_agent(caller_name),
+        list_agents,
+        close_agent,
+    ]
+
+    # finish_worktree is experimental - enable with experimental.finish_worktree: true
+    if CONFIG.get("experimental", {}).get("finish_worktree", False):
+        tools.append(finish_worktree)
+
     return create_sdk_mcp_server(
         name="chic",
         version="1.0.0",
-        tools=[
-            _make_spawn_agent(caller_name),
-            _make_spawn_worktree(caller_name),
-            _make_ask_agent(caller_name),
-            _make_tell_agent(caller_name),
-            list_agents,
-            close_agent,
-            finish_worktree,
-        ],
+        tools=tools,
     )
